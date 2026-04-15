@@ -1,0 +1,11 @@
+name: claw-env
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - rust=1.75
+  - cargo
+  - make
+  - git
+  - pip
+  - setuptools

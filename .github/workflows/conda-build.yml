@@ -1,0 +1,241 @@
+name: Build Conda Environment
+run-name: Build ${{ github.event.inputs.platform }} conda env
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Target platform for conda env"
+        type: choice
+        required: true
+        default: "windows"
+        options:
+          - windows
+          - linux
+          - macos
+      rust_toolchain:
+        description: "Rust toolchain version"
+        type: string
+        required: false
+        default: "stable"
+      build_profile:
+        description: "Cargo build profile"
+        type: choice
+        required: false
+        default: "release"
+        options:
+          - release
+          - debug
+      retention_days:
+        description: "Days to keep the artifacts"
+        type: int
+        required: false
+        default: 30
+      create_release:
+        description: "Create GitHub release (tag required)"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build_conda_env:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+            target_folder: "D:/conda_envs"
+            env_name: "claw-env"
+            bin_name: "claw.exe"
+          - platform: linux
+            os: ubuntu-latest
+            target_folder: "/home/runner/conda_envs"
+            env_name: "claw-env"
+            bin_name: "claw"
+          - platform: macos
+            os: macos-14
+            target_folder: "/Users/runner/conda_envs"
+            env_name: "claw-env"
+            bin_name: "claw"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine release tag
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          
+          if [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            echo "name=claw-env-${{ github.event.inputs.platform }}-b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${GITHUB_REF#refs/heads/}" | tr '/' '-')
+            echo "name=claw-env-${{ github.event.inputs.platform }}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        if: ${{ github.event.inputs.create_release == 'true' }}
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          release_name: ${{ steps.tag.outputs.name }}
+          draft: false
+          prerelease: false
+
+      - name: Setup Miniforge
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          auto-activate-base: false
+          use-mamba: true
+          mamba-version: latest
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust -> target
+
+      - name: Create Conda Environment
+        shell: bash
+        run: |
+          mkdir -p ${{ matrix.target_folder }}
+          
+          ENV_PATH="${{ matrix.target_folder }}/${{ matrix.env_name }}"
+          if [ -d "$ENV_PATH" ]; then
+            echo "Updating existing environment..."
+            conda env update -f .github/workflows/environment.yml -p "$ENV_PATH"
+          else
+            echo "Creating new environment..."
+            conda env create -f .github/workflows/environment.yml -p "$ENV_PATH"
+          fi
+
+      - name: Build Rust project
+        shell: bash
+        run: |
+          cd rust
+          cargo build --${{ github.event.inputs.build_profile }} -p rusty-claude-cli
+
+      - name: Install binary into Conda environment
+        shell: bash
+        run: |
+          BIN_PATH="rust/target/${{ github.event.inputs.build_profile }}/${{ matrix.bin_name }}"
+          ENV_BIN_DIR="${{ matrix.target_folder }}/${{ matrix.env_name }}/bin"
+          
+          echo "Copying $BIN_PATH to $ENV_BIN_DIR"
+          cp "$BIN_PATH" "$ENV_BIN_DIR/${{ matrix.bin_name }}"
+          
+          if [[ "${{ matrix.os }}" != "windows-latest" ]]; then
+            chmod +x "$ENV_BIN_DIR/${{ matrix.bin_name }}"
+          fi
+
+      - name: Verify installation
+        shell: bash
+        run: |
+          source $CONDA/etc/profile.d/conda.sh
+          conda activate "${{ matrix.target_folder }}/${{ matrix.env_name }}"
+          
+          echo "Checking claw..."
+          which claw
+          
+          echo "Environment contents:"
+          conda list
+
+      - name: Export environment specification
+        shell: bash
+        run: |
+          source $CONDA/etc/profile.d/conda.sh
+          conda activate "${{ matrix.target_folder }}/${{ matrix.env_name }}"
+          
+          mkdir -p zipped          
+
+
+      - name: Setup 7-Zip
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y p7zip-full
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            brew install p7zip || true
+          else
+            # Windows
+            if (!(Test-Path "C:/Program Files/7-Zip/7z.exe")) {
+              choco install 7zip -y
+            }
+          fi
+
+      - name: Compress environment
+        shell: bash
+        run: |
+          ENV_ARCHIVE="zipped/claw-env-${{ github.event.inputs.platform }}-${{ steps.tag.outputs.name }}"
+          
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            "C:/Program Files/7-Zip/7z.exe" a -t7z -v800m "${ENV_ARCHIVE}.7z.001" "${{ matrix.target_folder }}/${{ matrix.env_name }}"/
+          else
+            7z a -t7z -v800m "${ENV_ARCHIVE}.7z.001" "${{ matrix.target_folder }}/${{ matrix.env_name }}"/
+          fi
+          
+          ls -la zipped/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: claw-env-${{ github.event.inputs.platform }}-${{ steps.tag.outputs.name }}
+          path: |
+            zipped/*.7z.*
+            zipped/environment.yml
+            zipped/README.md
+          retention-days: ${{ github.event.inputs.retention_days }}
+
+      - name: Upload to Release
+        if: ${{ github.event.inputs.create_release == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const releaseId = '${{ steps.create_release.outputs.id }}';
+            
+            let body = '';
+            try {
+              body = fs.readFileSync('zipped/README.md', 'utf8');
+            } catch (err) {
+              console.log('No README found');
+            }
+            
+            await github.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId,
+              body: body
+            });
+            
+            const files = fs.readdirSync('zipped').filter(f => f.startsWith('claw-env'));
+            for (const file of files) {
+              console.log(`Uploading ${file}`);
+              await github.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: releaseId,
+                name: file,
+                data: fs.readFileSync(`zipped/${file}`)
+              });
+            }

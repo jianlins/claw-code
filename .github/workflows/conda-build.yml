@@ -49,17 +49,17 @@ jobs:
         include:
           - platform: windows
             os: windows-latest
-            target_folder: "D:/conda_envs"
+            target_folder: "conda_envs"
             env_name: "claw-env"
             bin_name: "claw.exe"
           - platform: linux
             os: ubuntu-latest
-            target_folder: "/home/runner/conda_envs"
+            target_folder: "conda_envs"
             env_name: "claw-env"
             bin_name: "claw"
           - platform: macos
             os: macos-14
-            target_folder: "/Users/runner/conda_envs"
+            target_folder: "conda_envs"
             env_name: "claw-env"
             bin_name: "claw"
 
@@ -117,16 +117,19 @@ jobs:
       - name: Create Conda Environment
         shell: bash
         run: |
-          mkdir -p ${{ matrix.target_folder }}
+          TARGET_PATH="${GITHUB_WORKSPACE}/${{ matrix.target_folder }}"
+          mkdir -p "$TARGET_PATH"
           
-          ENV_PATH="${{ matrix.target_folder }}/${{ matrix.env_name }}"
+          ENV_PATH="$TARGET_PATH/${{ matrix.env_name }}"
           if [ -d "$ENV_PATH" ]; then
             echo "Updating existing environment..."
-            conda env update -f .github/workflows/environment.yml -p "$ENV_PATH"
+            conda env update -f environment.yml -p "$ENV_PATH"
           else
             echo "Creating new environment..."
-            conda env create -f .github/workflows/environment.yml -p "$ENV_PATH"
+            conda env create -f environment.yml -p "$ENV_PATH"
           fi
+          
+          echo "TARGET_PATH=$TARGET_PATH" >> $GITHUB_ENV
 
       - name: Build Rust project
         shell: bash
@@ -138,7 +141,7 @@ jobs:
         shell: bash
         run: |
           BIN_PATH="rust/target/${{ github.event.inputs.build_profile }}/${{ matrix.bin_name }}"
-          ENV_BIN_DIR="${{ matrix.target_folder }}/${{ matrix.env_name }}/bin"
+          ENV_BIN_DIR="${TARGET_PATH}/${{ matrix.env_name }}/bin"
           
           echo "Copying $BIN_PATH to $ENV_BIN_DIR"
           cp "$BIN_PATH" "$ENV_BIN_DIR/${{ matrix.bin_name }}"
@@ -151,7 +154,7 @@ jobs:
         shell: bash
         run: |
           source $CONDA/etc/profile.d/conda.sh
-          conda activate "${{ matrix.target_folder }}/${{ matrix.env_name }}"
+          conda activate "${TARGET_PATH}/${{ matrix.env_name }}"
           
           echo "Checking claw..."
           which claw
@@ -163,9 +166,43 @@ jobs:
         shell: bash
         run: |
           source $CONDA/etc/profile.d/conda.sh
-          conda activate "${{ matrix.target_folder }}/${{ matrix.env_name }}"
+          conda activate "${TARGET_PATH}/${{ matrix.env_name }}"
           
-          mkdir -p zipped          
+          mkdir -p zipped
+          
+          # Export environment.yml
+          conda env export --no-builds -f zipped/environment.yml
+          
+          # Create README.md
+          cat > zipped/README.md << 'EOF'
+# Claw Conda Environment
+
+This is a pre-built conda environment containing the Claw CLI tool.
+
+## Installation
+
+1. Download all `.7z` parts and ensure they are in the same directory
+2. Extract using: `7z x claw-env-{platform}-{version}.7z.001`
+3. Activate the environment:
+   ```bash
+   source $CONDA/etc/profile.d/conda.sh
+   conda activate ./claw-env
+   ```
+4. Run `claw --help` to verify installation
+
+## Usage
+
+```bash
+claw --help
+claw run "your task here"
+```
+
+## Environment Details
+
+- Python: 3.11
+- Platform: ${{ github.event.inputs.platform }}
+- Built from commit: ${{ github.sha }}
+EOF          
 
 
       - name: Setup 7-Zip
@@ -176,21 +213,28 @@ jobs:
           elif [[ "${{ runner.os }}" == "macOS" ]]; then
             brew install p7zip || true
           else
-            # Windows
-            if (!(Test-Path "C:/Program Files/7-Zip/7z.exe")) {
+            # Windows - use choco or winget
+            if [[ -f "/c/Program Files/7-Zip/7z.exe" ]]; then
+              echo "7-Zip already installed"
+            elif command -v choco &> /dev/null; then
               choco install 7zip -y
-            }
+            else
+              winget install --id 7zip.7zip -e --source winget
+            fi
           fi
 
       - name: Compress environment
         shell: bash
         run: |
           ENV_ARCHIVE="zipped/claw-env-${{ github.event.inputs.platform }}-${{ steps.tag.outputs.name }}"
+          ENV_DIR="${TARGET_PATH}/${{ matrix.env_name }}"
+          
+          echo "Compressing $ENV_DIR to ${ENV_ARCHIVE}.7z"
           
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            "C:/Program Files/7-Zip/7z.exe" a -t7z -v800m "${ENV_ARCHIVE}.7z.001" "${{ matrix.target_folder }}/${{ matrix.env_name }}"/
+            "C:/Program Files/7-Zip/7z.exe" a -t7z -v800m "${ENV_ARCHIVE}.7z.001" "$ENV_DIR"/
           else
-            7z a -t7z -v800m "${ENV_ARCHIVE}.7z.001" "${{ matrix.target_folder }}/${{ matrix.env_name }}"/
+            7z a -t7z -v800m "${ENV_ARCHIVE}.7z.001" "$ENV_DIR"/
           fi
           
           ls -la zipped/

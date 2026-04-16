@@ -258,6 +258,24 @@ jobs:
             zipped/README.md
           retention-days: ${{ github.event.inputs.retention_days }}
 
+      - name: Create source code archive
+        if: ${{ github.event.inputs.create_release == 'true' }}
+        shell: bash
+        run: |
+          cd zipped
+          # Create source code archive (tar.gz format)
+          tar -czvf claw-code-source-${{ steps.tag.outputs.name }}.tar.gz \
+            --exclude='.git' \
+            --exclude='target' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.vscode' \
+            --exclude='.idea' \
+            --exclude='.env' \
+            --exclude='conda_envs' \
+            ../
+          ls -la
+
       - name: Upload to Release
         if: ${{ github.event.inputs.create_release == 'true' }}
         uses: actions/github-script@v7
@@ -281,7 +299,8 @@ jobs:
               body: body
             });
             
-            const files = fs.readdirSync('zipped').filter(f => f.startsWith('claw-env'));
+            // Upload all files from zipped directory
+            const files = fs.readdirSync('zipped').filter(f => f.startsWith('claw'));
             for (const file of files) {
               console.log(`Uploading ${file}`);
               await github.repos.uploadReleaseAsset({

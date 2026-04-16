@@ -116,6 +116,11 @@ jobs:
       - name: Create Conda Environment
         shell: bash
         run: |
+          # Source conda for bash on Windows
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            source "$CONDA\etc\profile.d\conda.sh"
+          fi
+          
           TARGET_PATH="${GITHUB_WORKSPACE}/${{ matrix.target_folder }}"
           mkdir -p "$TARGET_PATH"
           

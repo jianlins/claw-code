@@ -174,35 +174,35 @@ jobs:
           conda env export --no-builds -f zipped/environment.yml
           
           # Create README.md
-          cat > zipped/README.md << 'EOF'
-# Claw Conda Environment
-
-This is a pre-built conda environment containing the Claw CLI tool.
-
-## Installation
-
-1. Download all `.7z` parts and ensure they are in the same directory
-2. Extract using: `7z x claw-env-{platform}-{version}.7z.001`
-3. Activate the environment:
-   ```bash
-   source $CONDA/etc/profile.d/conda.sh
-   conda activate ./claw-env
-   ```
-4. Run `claw --help` to verify installation
-
-## Usage
-
-```bash
-claw --help
-claw run "your task here"
-```
-
-## Environment Details
-
-- Python: 3.11
-- Platform: ${{ github.event.inputs.platform }}
-- Built from commit: ${{ github.sha }}
-EOF          
+          printf '%s\n' \
+            "# Claw Conda Environment" \
+            "" \
+            "This is a pre-built conda environment containing the Claw CLI tool." \
+            "" \
+            "## Installation" \
+            "" \
+            "1. Download all `.7z` parts and ensure they are in the same directory" \
+            "2. Extract using: `7z x claw-env-{platform}-{version}.7z.001`" \
+            "3. Activate the environment:" \
+            "   ```bash" \
+            "   source \$CONDA/etc/profile.d/conda.sh" \
+            "   conda activate ./claw-env" \
+            "   ```" \
+            "4. Run `claw --help` to verify installation" \
+            "" \
+            "## Usage" \
+            "" \
+            "```bash" \
+            "claw --help" \
+            "claw run \"your task here\"" \
+            "```" \
+            "" \
+            "## Environment Details" \
+            "" \
+            "- Python: 3.11" \
+            "- Platform: ${{ github.event.inputs.platform }}" \
+            "- Built from commit: ${{ github.sha }}" \
+            > zipped/README.md          
 
 
       - name: Setup 7-Zip

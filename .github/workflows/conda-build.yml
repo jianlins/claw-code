@@ -101,9 +101,8 @@ jobs:
         uses: conda-incubator/setup-miniconda@v3
         with:
           miniforge-version: latest
-          auto-activate-base: false
+          activate-environment: base
           use-mamba: true
-          mamba-version: latest
 
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable

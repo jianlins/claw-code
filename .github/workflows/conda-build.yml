@@ -172,36 +172,29 @@ jobs:
           # Export environment.yml
           conda env export --no-builds -f zipped/environment.yml
           
-          # Create README.md
-          printf '%s\n' \
-            "# Claw Conda Environment" \
-            "" \
-            "This is a pre-built conda environment containing the Claw CLI tool." \
-            "" \
-            "## Installation" \
-            "" \
-            "1. Download all `.7z` parts and ensure they are in the same directory" \
-            "2. Extract using: `7z x claw-env-{platform}-{version}.7z.001`" \
-            "3. Activate the environment:" \
-            "   ```bash" \
-            "   source \$CONDA/etc/profile.d/conda.sh" \
-            "   conda activate ./claw-env" \
-            "   ```" \
-            "4. Run `claw --help` to verify installation" \
-            "" \
-            "## Usage" \
-            "" \
-            "```bash" \
-            "claw --help" \
-            "claw run \"your task here\"" \
-            "```" \
-            "" \
-            "## Environment Details" \
-            "" \
-            "- Python: 3.11" \
-            "- Platform: ${{ github.event.inputs.platform }}" \
-            "- Built from commit: ${{ github.sha }}" \
-            > zipped/README.md          
+          # Create README.md using echo
+          echo "# Claw Conda Environment" > zipped/README.md
+          echo "" >> zipped/README.md
+          echo "This is a pre-built conda environment containing the Claw CLI tool." >> zipped/README.md
+          echo "" >> zipped/README.md
+          echo "## Installation" >> zipped/README.md
+          echo "" >> zipped/README.md
+          echo "1. Download all .7z parts and ensure they are in the same directory" >> zipped/README.md
+          echo "2. Extract using: 7z x claw-env-{platform}-{version}.7z.001" >> zipped/README.md
+          echo "3. Activate the environment:" >> zipped/README.md
+          echo "   \\$CONDA/etc/profile.d/conda.sh" >> zipped/README.md
+          echo "   conda activate ./claw-env" >> zipped/README.md
+          echo "4. Run claw --help to verify installation" >> zipped/README.md
+          echo "" >> zipped/README.md
+          echo "## Usage" >> zipped/README.md
+          echo "" >> zipped/README.md
+          echo "claw --help" >> zipped/README.md
+          echo "" >> zipped/README.md
+          echo "## Environment Details" >> zipped/README.md
+          echo "" >> zipped/README.md
+          echo "- Python: 3.11" >> zipped/README.md
+          echo "- Platform: ${{ github.event.inputs.platform }}" >> zipped/README.md
+          echo "- Built from commit: ${{ github.sha }}" >> zipped/README.md          
 
 
       - name: Setup 7-Zip

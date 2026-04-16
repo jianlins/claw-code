@@ -36,6 +36,11 @@ on:
         type: boolean
         required: false
         default: false
+      conda_env_path:
+        description: "Conda environment installation path"
+        type: string
+        required: false
+        default: "C:\\Users\\VHASLCShiJ\\software\\miniforge3\\envs\\clawcode-env"
 
 permissions:
   contents: write
@@ -123,10 +128,27 @@ jobs:
             source "$CONDA\etc\profile.d\conda.sh"
           fi
           
-          TARGET_PATH="${GITHUB_WORKSPACE}/${{ matrix.target_folder }}"
-          mkdir -p "$TARGET_PATH"
+          # Use user-specified path or default to workspace
+          if [[ -n "${{ github.event.inputs.conda_env_path }}" ]]; then
+            # User specified path - use as-is
+            ENV_PATH="${{ github.event.inputs.conda_env_path }}"
+            echo "Using user-specified path: $ENV_PATH"
+            
+            # On Windows, convert forward slashes to backslashes for mkdir
+            if [[ "${{ runner.os }}" == "Windows" ]]; then
+              ENV_PATH=$(echo "$ENV_PATH" | sed 's/\//\\/g')
+            fi
+          else
+            # Default: use workspace directory
+            TARGET_PATH="${GITHUB_WORKSPACE}/${{ matrix.target_folder }}"
+            mkdir -p "$TARGET_PATH"
+            ENV_PATH="$TARGET_PATH/${{ matrix.env_name }}"
+            echo "Using default workspace path: $ENV_PATH"
+          fi
           
-          ENV_PATH="$TARGET_PATH/${{ matrix.env_name }}"
+          # Create parent directory if needed
+          mkdir -p "$(dirname "$ENV_PATH")"
+          
           if [ -d "$ENV_PATH" ]; then
             echo "Updating existing environment..."
             conda env update -f environment.yml -p "$ENV_PATH"
@@ -135,7 +157,7 @@ jobs:
             conda env create -f environment.yml -p "$ENV_PATH"
           fi
           
-          echo "TARGET_PATH=$TARGET_PATH" >> $GITHUB_ENV
+          echo "ENV_PATH=$ENV_PATH" >> $GITHUB_ENV
 
       - name: Build Rust project
         shell: bash
@@ -154,9 +176,9 @@ jobs:
           
           # Windows uses Scripts, others use bin
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            ENV_BIN_DIR="${TARGET_PATH}/${{ matrix.env_name }}/Scripts"
+            ENV_BIN_DIR="${ENV_PATH}/Scripts"
           else
-            ENV_BIN_DIR="${TARGET_PATH}/${{ matrix.env_name }}/bin"
+            ENV_BIN_DIR="${ENV_PATH}/bin"
           fi
           
           echo "Copying $BIN_PATH to $ENV_BIN_DIR"
@@ -170,19 +192,22 @@ jobs:
         shell: bash
         run: |
           source $CONDA/etc/profile.d/conda.sh
-          conda activate "${TARGET_PATH}/${{ matrix.env_name }}"
+          conda activate "$ENV_PATH"
           
-          echo "Checking claw..."
+          echo "=== Checking if claw is in PATH ==="
           which claw
           
-          echo "Environment contents:"
+          echo "=== Verifying claw command works ==="
+          claw --version || true
+          
+          echo "=== Environment contents ==="
           conda list
 
       - name: Export environment specification
         shell: bash
         run: |
           source $CONDA/etc/profile.d/conda.sh
-          conda activate "${TARGET_PATH}/${{ matrix.env_name }}"
+          conda activate "$ENV_PATH"
           
           mkdir -p zipped
           
@@ -199,13 +224,16 @@ jobs:
           echo "1. Download all .7z parts and ensure they are in the same directory" >> zipped/README.md
           echo "2. Extract using: 7z x claw-env-{platform}-{version}.7z.001" >> zipped/README.md
           echo "3. Activate the environment:" >> zipped/README.md
-          echo "   \\$CONDA/etc/profile.d/conda.sh" >> zipped/README.md
+          echo "   \$CONDA/etc/profile.d/conda.sh" >> zipped/README.md
           echo "   conda activate ./claw-env" >> zipped/README.md
-          echo "4. Run claw --help to verify installation" >> zipped/README.md
+          echo "4. Verify claw is in PATH:" >> zipped/README.md
+          echo "   which claw" >> zipped/README.md
+          echo "   claw --version" >> zipped/README.md
           echo "" >> zipped/README.md
           echo "## Usage" >> zipped/README.md
           echo "" >> zipped/README.md
-          echo "claw --help" >> zipped/README.md
+          echo "After activation, use claw anywhere in your terminal:" >> zipped/README.md
+          echo "   claw --help" >> zipped/README.md
           echo "" >> zipped/README.md
           echo "## Environment Details" >> zipped/README.md
           echo "" >> zipped/README.md
@@ -236,14 +264,13 @@ jobs:
         shell: bash
         run: |
           ENV_ARCHIVE="zipped/claw-env-${{ github.event.inputs.platform }}-${{ steps.tag.outputs.name }}"
-          ENV_DIR="${TARGET_PATH}/${{ matrix.env_name }}"
           
-          echo "Compressing $ENV_DIR to ${ENV_ARCHIVE}.7z"
+          echo "Compressing $ENV_PATH to ${ENV_ARCHIVE}.7z"
           
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            "C:/Program Files/7-Zip/7z.exe" a -t7z -v800m "${ENV_ARCHIVE}.7z.001" "$ENV_DIR"/
+            "C:/Program Files/7-Zip/7z.exe" a -t7z -v800m "${ENV_ARCHIVE}.7z.001" "$ENV_PATH"/
           else
-            7z a -t7z -v800m "${ENV_ARCHIVE}.7z.001" "$ENV_DIR"/
+            7z a -t7z -v800m "${ENV_ARCHIVE}.7z.001" "$ENV_PATH"/
           fi
           
           ls -la zipped/

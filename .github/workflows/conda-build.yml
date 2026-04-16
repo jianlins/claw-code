@@ -145,12 +145,18 @@ jobs:
         shell: bash
         run: |
           BIN_PATH="rust/target/${{ github.event.inputs.build_profile }}/${{ matrix.bin_name }}"
-          ENV_BIN_DIR="${TARGET_PATH}/${{ matrix.env_name }}/bin"
+          
+          # Windows uses Scripts, others use bin
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            ENV_BIN_DIR="${TARGET_PATH}/${{ matrix.env_name }}/Scripts"
+          else
+            ENV_BIN_DIR="${TARGET_PATH}/${{ matrix.env_name }}/bin"
+          fi
           
           echo "Copying $BIN_PATH to $ENV_BIN_DIR"
           cp "$BIN_PATH" "$ENV_BIN_DIR/${{ matrix.bin_name }}"
           
-          if [[ "${{ matrix.os }}" != "windows-latest" ]]; then
+          if [[ "${{ runner.os }}" != "Windows" ]]; then
             chmod +x "$ENV_BIN_DIR/${{ matrix.bin_name }}"
           fi
 

@@ -160,11 +160,7 @@ jobs:
           fi
           
           echo "Copying $BIN_PATH to $ENV_BIN_DIR"
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            cmd /c copy "$BIN_PATH" "$ENV_BIN_DIR/${{ matrix.bin_name }}"
-          else
-            cp "$BIN_PATH" "$ENV_BIN_DIR/${{ matrix.bin_name }}"
-          fi
+          cp "$BIN_PATH" "$ENV_BIN_DIR/${{ matrix.bin_name }}"
           
           if [[ "${{ runner.os }}" != "Windows" ]]; then
             chmod +x "$ENV_BIN_DIR/${{ matrix.bin_name }}"

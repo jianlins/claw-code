@@ -105,7 +105,9 @@ jobs:
           use-mamba: true
 
       - name: Setup Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -139,7 +141,11 @@ jobs:
         shell: bash
         run: |
           cd rust
-          cargo build --${{ github.event.inputs.build_profile }} -p rusty-claude-cli
+          if [[ "${{ github.event.inputs.build_profile }}" == "release" ]]; then
+            cargo build --release -p rusty-claude-cli
+          else
+            cargo build -p rusty-claude-cli
+          fi
 
       - name: Install binary into Conda environment
         shell: bash
@@ -154,7 +160,11 @@ jobs:
           fi
           
           echo "Copying $BIN_PATH to $ENV_BIN_DIR"
-          cp "$BIN_PATH" "$ENV_BIN_DIR/${{ matrix.bin_name }}"
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            cmd /c copy "$BIN_PATH" "$ENV_BIN_DIR/${{ matrix.bin_name }}"
+          else
+            cp "$BIN_PATH" "$ENV_BIN_DIR/${{ matrix.bin_name }}"
+          fi
           
           if [[ "${{ runner.os }}" != "Windows" ]]; then
             chmod +x "$ENV_BIN_DIR/${{ matrix.bin_name }}"
@@ -217,7 +227,7 @@ jobs:
             brew install p7zip || true
           else
             # Windows - use choco or winget
-            if [[ -f "/c/Program Files/7-Zip/7z.exe" ]]; then
+            if [[ -f "C:/Program Files/7-Zip/7z.exe" ]]; then
               echo "7-Zip already installed"
             elif command -v choco &> /dev/null; then
               choco install 7zip -y

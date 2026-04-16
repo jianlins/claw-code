@@ -37,10 +37,10 @@ on:
         required: false
         default: false
       conda_env_path:
-        description: "Conda environment installation path"
+        description: "Conda environment installation path (leave empty for workspace default)"
         type: string
         required: false
-        default: "C:\\Users\\VHASLCShiJ\\software\\miniforge3\\envs\\clawcode-env"
+        default: ""
 
 permissions:
   contents: write
